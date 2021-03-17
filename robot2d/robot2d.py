@@ -1,12 +1,12 @@
 #!/usr/bin/python
 
 import numpy as np
-from utils import *
+from .utils import *
 import time
 from matplotlib import pyplot as plt
 
 
-class Robot:
+class Robot2D:
     def __init__(self,
                 env_max_size = 5,  
                 env_min_size = -5, 
@@ -189,35 +189,3 @@ class Environment:
         self.rcs = np.array(rcs)
 
 
-if __name__ == '__main__':
-    robot = Robot()
-    print('Start process')
-    N = 10
-    vx = 2.
-    vy = -3
-
-    robot.reset()
-
-    for i in range(N):
-        robot.step(vx, vy)
-        c = robot.is_crashed()
-        if c:
-            print('Crashed')
-        robot.scanning()
-        robot.render()
-        time.sleep(robot.dT)
-        print('step {}'.format(i))
-    robot.close()
-
-    robot.set_init_state(0.4, -3)
-    for i in range(N):
-        robot.step(vx, vy)
-        c = robot.is_crashed()
-        if c:
-            print('Crashed')
-        robot.scanning()
-        robot.render()
-        time.sleep(robot.dT)
-        print('step {}'.format(i))
-    robot.close()
-    time.sleep(2)
