@@ -13,7 +13,8 @@ class Robot2D:
                 robot_radius = 0.4,
                 lidar_max_range = 2., 
                 dT = 0.01, 
-                is_render = True):
+                is_render = True,
+                is_goal = True):
 
         # Environment
         self.env = Environment(env_min_size, env_max_size)
@@ -25,6 +26,12 @@ class Robot2D:
         self.yr = 0
         self.rr = robot_radius
 
+        # Goal parameters
+        self.is_goal = is_goal
+        self.xg = 0
+        self.yg = 0
+        self.rg = 0.1
+
         # Lidar parameters
         self.max_range = lidar_max_range
         self.xls = []
@@ -35,50 +42,39 @@ class Robot2D:
         self.is_render = is_render
         self.fig = None
         self.ax = None
+        self.first_render = True
 
 
     def reset(self):
         self.xr = np.random.uniform(low = self.env_min_size + self.rr , high = self.env_max_size - self.rr)
         self.yr = np.random.uniform(low = self.env_min_size + self.rr , high = self.env_max_size - self.rr)
 
+        if self.is_goal:
+            self.xg = self.env._random_point_without_robot(self.xr, self.rr, self.rg)
+            self.yg = self.env._random_point_without_robot(self.yr, self.rr, self.rg)
+
         self.env.get_random_obstacles(self.xr, self.yr, self.rr)
         self.xls = []
         self.yls = []
-
-        # If render enabled, 
-        if self.is_render:
-            plt.ion()
-            self.fig, self.ax = plt.subplots(figsize=(10,10))
-            self.ax.set_xlim((-5, 5))
-            self.ax.set_ylim((-5, 5))
-            circle = plt.Circle((self.xr, self.yr), self.rr, color='r', fill=True)
-            self.ax.add_patch(circle)
-            plt.pause(0.5)
 
     def set_init_state(self, x0, y0):
         self.xr = x0
         self.yr = y0
 
-        cond = False
         if ( (self.xr > self.env_max_size - self.rr ) or (self.xr < self.env_min_size + self.rr )):
             raise ValueError('x value: {} is out of range {} and {}'.format(self.xr, self.env_min_size, self.env_max_size))
 
         if ( (self.yr > self.env_max_size - self.rr ) or (self.yr < self.env_min_size + self.rr )):
             raise ValueError('y value: {} is out of range {} and {}'.format(self.yr, self.env_min_size, self.env_max_size))
 
+
+        if self.is_goal:
+            self.xr = self.env._random_point_without_robot(self.xr, self.rr, self.rg)
+            self.yr = self.env._random_point_without_robot(self.yr, self.rr, self.rg)
+
         self.env.get_random_obstacles(self.xr, self.yr, self.rr)
         self.xls = []
         self.yls = []
-
-        # If render enabled, 
-        if self.is_render:
-            plt.ion()
-            self.fig, self.ax = plt.subplots(figsize=(10,10))
-            self.ax.set_xlim((-5, 5))
-            self.ax.set_ylim((-5, 5))
-            circle = plt.Circle((self.xr, self.yr), self.rr, color='r', fill=True)
-            self.ax.add_patch(circle)
-            plt.pause(0.5)
             
 
     def step(self, vx, vy):
@@ -127,7 +123,20 @@ class Robot2D:
 
 
     def render(self):
+        # If render enabled, 
+        if self.is_render and self.first_render:
+            plt.ion()
+            self.fig, self.ax = plt.subplots(figsize=(10,10))
+            self.ax.set_xlim((-5, 5))
+            self.ax.set_ylim((-5, 5))
+            circle = plt.Circle((self.xr, self.yr), self.rr, color='r', fill=True)
+            self.ax.add_patch(circle)
+            plt.pause(0.5)
+            self.first_render = False
+
+
         if self.is_render:
+                
             xcs = self.env.xcs
             ycs = self.env.ycs
             rcs = self.env.rcs
@@ -136,6 +145,11 @@ class Robot2D:
             self.ax.set_ylim((-5, 5))
             circle = plt.Circle((self.xr, self.yr), self.rr, color='r', fill=True,zorder=10)
             self.ax.add_patch(circle)
+
+            if self.is_goal:
+                circle = plt.Circle((self.xg, self.yg), self.rg, color='g', fill=True,zorder=10)
+                self.ax.add_patch(circle)
+
             self.ax.scatter( self.xls, self.yls , color = 'r')
             for xc, yc, rc in zip(xcs, ycs, rcs):
                 circle = plt.Circle((xc, yc), rc, color='b', fill=True)
@@ -149,8 +163,7 @@ class Robot2D:
     def close(self):
         plt.ioff()
         plt.close()
-
-
+        self.first_render = True
 
 
 class Environment:
@@ -174,15 +187,35 @@ class Environment:
                 cond = True
         return p
 
+    def _random_point_without_robot_and_goal(self, pr, rr, pg, rg, r):
+        cond = False
+        while not cond:
+            p = np.random.uniform(low = self.env_min_size + rr + r, high = self.env_max_size - r -rr) 
+            if ( (p < pr + r + rr )  and (p > pr - r - rr) ):
+                pass
+            elif  ( (p < pg + r + rg )  and (p > pg - r - rg) ):
+                pass
+            else:
+                cond = True
+        return p
 
-    def get_random_obstacles(self, xr, yr, rr, n = 30, r = 0.3):
+    
+
+
+    def get_random_obstacles(self, xr, yr, rr, is_goal = False, xg = 0, yg = 0, rg = 0, n = 30, r = 0.3):
         xcs = []
         ycs = []
         rcs = n * [r]
         
-        for _ in range(n):
-            xcs.append(self._random_point_without_robot(xr, rr, r))
-            ycs.append(self._random_point_without_robot(yr, rr, r))
+        if is_goal:
+            for _ in range(n):
+                xcs.append(self._random_point_without_robot_and_goal(xr, rr, xg, rg, r))
+                ycs.append(self._random_point_without_robot_and_goal(yr, rr, yg, rg, r))
+        else:
+            for _ in range(n):
+                xcs.append(self._random_point_without_robot(xr, rr, r))
+                ycs.append(self._random_point_without_robot(yr, rr, r))
+        
 
         self.xcs = np.array(xcs)
         self.ycs = np.array(ycs)
