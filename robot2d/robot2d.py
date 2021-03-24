@@ -53,7 +53,7 @@ class Robot2D:
             self.xg = self.env._random_point_without_robot(self.xr, self.rr, self.rg)
             self.yg = self.env._random_point_without_robot(self.yr, self.rr, self.rg)
 
-        self.env.get_random_obstacles(self.xr, self.yr, self.rr)
+        self.env.get_random_obstacles(self.xr, self.yr, self.rr, self.is_goal, self.xg, self.yg, self.rg)
         self.xls = []
         self.yls = []
 
@@ -69,10 +69,10 @@ class Robot2D:
 
 
         if self.is_goal:
-            self.xr = self.env._random_point_without_robot(self.xr, self.rr, self.rg)
-            self.yr = self.env._random_point_without_robot(self.yr, self.rr, self.rg)
+            self.xg = self.env._random_point_without_robot(self.xr, self.rr, self.rg)
+            self.yg = self.env._random_point_without_robot(self.yr, self.rr, self.rg)
 
-        self.env.get_random_obstacles(self.xr, self.yr, self.rr)
+        self.env.get_random_obstacles(self.xr, self.yr, self.rr, self.is_goal, self.xg, self.yg, self.rg)
         self.xls = []
         self.yls = []
             
@@ -120,6 +120,12 @@ class Robot2D:
                     if cond:
                         self.xls[i] = result[0]
                         self.yls[i] = result[1]
+
+        xls = [max(min(x, 5.), -5) for x in self.xls]
+        self.xls = xls 
+        yls = [max(min(x, 5.), -5) for x in self.yls]
+        self.yls = yls 
+
 
 
     def render(self):
@@ -202,7 +208,7 @@ class Environment:
     
 
 
-    def get_random_obstacles(self, xr, yr, rr, is_goal = False, xg = 0, yg = 0, rg = 0, n = 30, r = 0.3):
+    def get_random_obstacles(self, xr, yr, rr, is_goal = False, xg = 0, yg = 0, rg = 0, n = 15, r = 0.3):
         xcs = []
         ycs = []
         rcs = n * [r]
