@@ -24,12 +24,14 @@ class Robot2D:
         # Initial State
         self.xr = 0
         self.yr = 0
+        self.thr = 0
         self.rr = robot_radius
 
         # Goal parameters
         self.is_goal = is_goal
         self.xg = 0
         self.yg = 0
+        self.thg = 0
         self.rg = 0.1
 
         # Lidar parameters
@@ -48,18 +50,20 @@ class Robot2D:
     def reset(self):
         self.xr = np.random.uniform(low = self.env_min_size + self.rr , high = self.env_max_size - self.rr)
         self.yr = np.random.uniform(low = self.env_min_size + self.rr , high = self.env_max_size - self.rr)
+        self.thr = np.random.uniform(low = -np.pi , high = np.pi)
 
         if self.is_goal:
-            self.xg = self.env._random_point_without_robot(self.xr, self.rr, self.rg)
-            self.yg = self.env._random_point_without_robot(self.yr, self.rr, self.rg)
+            self.xg, self.yg = self.env._random_point_without_robot(self.xr, self.yr, self.rr, self.rg)
+            self.thg = np.random.uniform(low = -np.pi , high = np.pi)
 
         self.env.get_random_obstacles(self.xr, self.yr, self.rr, self.is_goal, self.xg, self.yg, self.rg)
         self.xls = []
         self.yls = []
 
-    def set_init_state(self, x0, y0):
+    def set_init_state(self, x0, y0, th0 = 0):
         self.xr = x0
         self.yr = y0
+        self.thr = th0
 
         if ( (self.xr > self.env_max_size - self.rr ) or (self.xr < self.env_min_size + self.rr )):
             raise ValueError('x value: {} is out of range {} and {}'.format(self.xr, self.env_min_size, self.env_max_size))
@@ -69,18 +73,21 @@ class Robot2D:
 
 
         if self.is_goal:
-            self.xg = self.env._random_point_without_robot(self.xr, self.rr, self.rg)
-            self.yg = self.env._random_point_without_robot(self.yr, self.rr, self.rg)
+            self.xg, self.yg = self.env._random_point_without_robot(self.xr, self.yr, self.rr, self.rg)
+            self.thg = np.random.uniform(low = 0 , high = 2*np.pi)
 
         self.env.get_random_obstacles(self.xr, self.yr, self.rr, self.is_goal, self.xg, self.yg, self.rg)
         self.xls = []
         self.yls = []
             
 
-    def step(self, vx, vy):
-        self.xr = self.xr + self.dT * vx
-        self.yr = self.yr + self.dT * vy
- 
+    def step(self, vx, vy, w = 0):
+        self.xr = self.xr + self.dT * (  np.cos(self.thr) * vx - np.sin(self.thr) * vy )
+        self.yr = self.yr + self.dT * (  np.sin(self.thr) * vx + np.cos(self.thr) * vy )
+        self.thr = self.thr + self.dT * w
+        self.thr = clip_angle(self.thr)
+        print(self.thr)
+
     def is_crashed(self):
         xcs = self.env.xcs
         ycs = self.env.ycs
@@ -106,17 +113,16 @@ class Robot2D:
         r = self.max_range
         self.xls = []
         self.yls = []
-        ths = np.arange(0,360, 4) 
-        for th in ths:
-            thr = np.deg2rad(th)
-            self.xls.append(self.xr + r * np.cos(thr))
-            self.yls.append(self.yr + r * np.sin(thr))  
+        alphas = np.linspace(0,2*np.pi,99)
+        for alpha in alphas:
+            self.xls.append(self.xr + r * np.cos(alpha + self.thr))
+            self.yls.append(self.yr + r * np.sin(alpha + self.thr))  
          
-        for i, (xl, yl, th) in enumerate(zip(self.xls, self.yls, ths)):
+        for i, (xl, yl, alpha) in enumerate(zip(self.xls, self.yls, alphas)):
             for xc, yc, rc in zip(xcs, ycs, rcs):   
                 is_inter, result = obtain_intersection_points(self.xr, self.yr, xl, yl, xc, yc, rc) 
                 if is_inter:
-                    cond = validate_point(result[0] - self.xr, result[1] - self.yr, self.xls[i] - self.xr, self.yls[i] - self.yr, th, self.max_range)
+                    cond = validate_point(result[0] - self.xr, result[1] - self.yr, self.xls[i] - self.xr, self.yls[i] - self.yr, self.thr + alpha, self.max_range)
                     if cond:
                         self.xls[i] = result[0]
                         self.yls[i] = result[1]
@@ -142,7 +148,6 @@ class Robot2D:
 
 
         if self.is_render:
-                
             xcs = self.env.xcs
             ycs = self.env.ycs
             rcs = self.env.rcs
@@ -183,27 +188,31 @@ class Environment:
         self.ycs = ycs
         self.rcs = rcs
 
-    def _random_point_without_robot(self, pr, rr, r):
+    def _random_point_without_robot(self, pxr, pyr, rr, r):
         cond = False
-        while not cond:
-            p = np.random.uniform(low = self.env_min_size + rr + r, high = self.env_max_size - r -rr) 
-            if ( (p < pr + r + rr )  and (p > pr - r - rr) ):
+        while not cond:     
+            px = np.random.uniform(low = self.env_min_size + rr + r, high = self.env_max_size - r -rr) 
+            py = np.random.uniform(low = self.env_min_size + rr + r, high = self.env_max_size - r -rr) 
+            if ( (px < pxr + r + rr )  and (px > pxr - r - rr) ) \
+                and ( (py < pyr + r + rr )  and (py > pyr - r - rr) ) :
                 pass
             else:
                 cond = True
-        return p
+        return px, py
 
-    def _random_point_without_robot_and_goal(self, pr, rr, pg, rg, r):
+    def _random_point_without_robot_and_goal(self, pxr, pyr, rr, pxg, pyg, rg, r):
         cond = False
         while not cond:
-            p = np.random.uniform(low = self.env_min_size + rr + r, high = self.env_max_size - r -rr) 
-            if ( (p < pr + r + rr )  and (p > pr - r - rr) ):
-                pass
-            elif  ( (p < pg + r + rg )  and (p > pg - r - rg) ):
+            px = np.random.uniform(low = self.env_min_size + rr + r, high = self.env_max_size - r -rr) 
+            py = np.random.uniform(low = self.env_min_size + rr + r, high = self.env_max_size - r -rr) 
+            if ( (px < pxr + r + rr )  and (px > pxr - r - rr) ) \
+                and ( (px < pxg + r + rg )  and (px > pxg - r - rg) ) \
+                and ( (py < pyr + r + rr )  and (py > pyr - r - rr) ) \
+                and ( (py < pyg + r + rg )  and (py > pyg - r - rg) ):
                 pass
             else:
                 cond = True
-        return p
+        return px, py
 
     
 
@@ -215,12 +224,15 @@ class Environment:
         
         if is_goal:
             for _ in range(n):
-                xcs.append(self._random_point_without_robot_and_goal(xr, rr, xg, rg, r))
-                ycs.append(self._random_point_without_robot_and_goal(yr, rr, yg, rg, r))
+                
+                px, py= self._random_point_without_robot_and_goal(xr, yr, rr, xg, yg, rg, r)
+                xcs.append(px)
+                ycs.append(py)
         else:
             for _ in range(n):
-                xcs.append(self._random_point_without_robot(xr, rr, r))
-                ycs.append(self._random_point_without_robot(yr, rr, r))
+                px, py = self._random_point_without_robot(xr, yr, rr, r)
+                xcs.append(px)
+                ycs.append(py)
         
 
         self.xcs = np.array(xcs)

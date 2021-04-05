@@ -41,7 +41,6 @@ def obtain_intersection_points(x1, y1, x2, y2, xc, yc, rc):
         return False, -1 
 
 def validate_point(x, y, xo, yo, th, max_range):
-    th = np.deg2rad(th)
     # Check if it is the same direction
     if sgn(y) != sgn(np.sin(th)):
         return False
@@ -55,3 +54,14 @@ def validate_point(x, y, xo, yo, th, max_range):
         return False
     else:
         return True
+
+
+def clip_angle(th):
+    try:
+        while th <= -np.pi:
+            th = th + 2*np.pi
+        while th > np.pi:
+            th = th - 2*np.pi
+        return th
+    except:
+        raise Exception("th angle was not a number") 
