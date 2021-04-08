@@ -14,7 +14,8 @@ class Robot2D:
                 lidar_max_range = 2., 
                 dT = 0.01, 
                 is_render = True,
-                is_goal = True):
+                is_goal = True,
+                is_rotated = True):
 
         # Environment
         self.env = Environment(env_min_size, env_max_size)
@@ -26,6 +27,7 @@ class Robot2D:
         self.yr = 0
         self.thr = 0
         self.rr = robot_radius
+        self.is_rotated = is_rotated
 
         # Goal parameters
         self.is_goal = is_goal
@@ -50,7 +52,9 @@ class Robot2D:
     def reset(self):
         self.xr = np.random.uniform(low = self.env_min_size + self.rr , high = self.env_max_size - self.rr)
         self.yr = np.random.uniform(low = self.env_min_size + self.rr , high = self.env_max_size - self.rr)
-        self.thr = np.random.uniform(low = -np.pi , high = np.pi)
+
+        if self.is_rotated:
+            self.thr = np.random.uniform(low = -np.pi , high = np.pi)
 
         if self.is_goal:
             self.xg, self.yg = self.env._random_point_without_robot(self.xr, self.yr, self.rr, self.rg)
@@ -63,7 +67,7 @@ class Robot2D:
     def set_init_state(self, x0, y0, th0 = 0):
         self.xr = x0
         self.yr = y0
-        self.thr = th0
+        self.thr = clip_angle(th0)
 
         if ( (self.xr > self.env_max_size - self.rr ) or (self.xr < self.env_min_size + self.rr )):
             raise ValueError('x value: {} is out of range {} and {}'.format(self.xr, self.env_min_size, self.env_max_size))
@@ -86,7 +90,6 @@ class Robot2D:
         self.yr = self.yr + self.dT * (  np.sin(self.thr) * vx + np.cos(self.thr) * vy )
         self.thr = self.thr + self.dT * w
         self.thr = clip_angle(self.thr)
-        print(self.thr)
 
     def is_crashed(self):
         xcs = self.env.xcs
@@ -113,24 +116,34 @@ class Robot2D:
         r = self.max_range
         self.xls = []
         self.yls = []
-        alphas = np.linspace(0,2*np.pi,99)
+        touches = []
+        alphas = np.linspace(0,2*np.pi,90)
         for alpha in alphas:
             self.xls.append(self.xr + r * np.cos(alpha + self.thr))
             self.yls.append(self.yr + r * np.sin(alpha + self.thr))  
          
         for i, (xl, yl, alpha) in enumerate(zip(self.xls, self.yls, alphas)):
+            touch = False
             for xc, yc, rc in zip(xcs, ycs, rcs):   
                 is_inter, result = obtain_intersection_points(self.xr, self.yr, xl, yl, xc, yc, rc) 
                 if is_inter:
                     cond = validate_point(result[0] - self.xr, result[1] - self.yr, self.xls[i] - self.xr, self.yls[i] - self.yr, self.thr + alpha, self.max_range)
                     if cond:
+                        touch = True
                         self.xls[i] = result[0]
                         self.yls[i] = result[1]
+            touches.append(touch)
+
+        for i, (x, y) in enumerate(zip(self.xls,self.yls)):
+            if x >= 5 or x <= -5 or y >= 5 or y <= -5:
+                touches[i] = True 
+
 
         xls = [max(min(x, 5.), -5) for x in self.xls]
-        self.xls = xls 
+        self.xls = np.array(xls) 
         yls = [max(min(x, 5.), -5) for x in self.yls]
-        self.yls = yls 
+        self.yls = np.array(yls) 
+        return touches
 
 
 
@@ -154,8 +167,17 @@ class Robot2D:
             self.ax.clear()
             self.ax.set_xlim((-5, 5))
             self.ax.set_ylim((-5, 5))
+
             circle = plt.Circle((self.xr, self.yr), self.rr, color='r', fill=True,zorder=10)
             self.ax.add_patch(circle)
+
+
+            points = [ [self.rr * np.cos( self.thr + np.deg2rad(140)) + self.xr, self.rr * np.sin( self.thr + np.deg2rad(140)) + self.yr],
+                       [self.rr * np.cos( self.thr) + self.xr, self.rr * np.sin( self.thr) + self.yr], 
+                       [self.rr * np.cos( self.thr - np.deg2rad(140)) + self.xr, self.rr * np.sin( self.thr - np.deg2rad(140)) + self.yr]]
+            triag = plt.Polygon(points,zorder=20)
+            self.ax.add_patch(triag)
+
 
             if self.is_goal:
                 circle = plt.Circle((self.xg, self.yg), self.rg, color='g', fill=True,zorder=10)
@@ -183,7 +205,7 @@ class Environment:
         self.env_min_size = env_min_size
         self.env_max_size = env_max_size
         
-        # obstacles 3- x, y, radius        print(self.xcs)
+        # obstacles 3- x, y, radius
         self.xcs = xcs 
         self.ycs = ycs
         self.rcs = rcs
@@ -191,8 +213,8 @@ class Environment:
     def _random_point_without_robot(self, pxr, pyr, rr, r):
         cond = False
         while not cond:     
-            px = np.random.uniform(low = self.env_min_size + rr + r, high = self.env_max_size - r -rr) 
-            py = np.random.uniform(low = self.env_min_size + rr + r, high = self.env_max_size - r -rr) 
+            px = np.random.uniform(low = self.env_min_size + rr, high = self.env_max_size -rr) 
+            py = np.random.uniform(low = self.env_min_size + rr, high = self.env_max_size -rr) 
             if ( (px < pxr + r + rr )  and (px > pxr - r - rr) ) \
                 and ( (py < pyr + r + rr )  and (py > pyr - r - rr) ) :
                 pass
@@ -203,12 +225,12 @@ class Environment:
     def _random_point_without_robot_and_goal(self, pxr, pyr, rr, pxg, pyg, rg, r):
         cond = False
         while not cond:
-            px = np.random.uniform(low = self.env_min_size + rr + r, high = self.env_max_size - r -rr) 
-            py = np.random.uniform(low = self.env_min_size + rr + r, high = self.env_max_size - r -rr) 
-            if ( (px < pxr + r + rr )  and (px > pxr - r - rr) ) \
-                and ( (px < pxg + r + rg )  and (px > pxg - r - rg) ) \
-                and ( (py < pyr + r + rr )  and (py > pyr - r - rr) ) \
-                and ( (py < pyg + r + rg )  and (py > pyg - r - rg) ):
+            px = np.random.uniform(low = self.env_min_size + rr, high = self.env_max_size -rr) 
+            py = np.random.uniform(low = self.env_min_size + rr, high = self.env_max_size -rr) 
+            if (( (px < pxr + r + rr )  and (px > pxr - r - rr) ) \
+                and ( (py < pyr + r + rr )  and (py > pyr - r - rr) )) \
+                or ( ( (px < pxg + r + rg )  and (px > pxg - r - rg) ) \
+                and ( (py < pyg + r + rg )  and (py > pyg - r - rg) )):
                 pass
             else:
                 cond = True
@@ -217,14 +239,13 @@ class Environment:
     
 
 
-    def get_random_obstacles(self, xr, yr, rr, is_goal = False, xg = 0, yg = 0, rg = 0, n = 15, r = 0.3):
+    def get_random_obstacles(self, xr, yr, rr, is_goal = False, xg = 0, yg = 0, rg = 0, n = 25, r = 0.3):
         xcs = []
         ycs = []
         rcs = n * [r]
         
         if is_goal:
             for _ in range(n):
-                
                 px, py= self._random_point_without_robot_and_goal(xr, yr, rr, xg, yg, rg, r)
                 xcs.append(px)
                 ycs.append(py)
