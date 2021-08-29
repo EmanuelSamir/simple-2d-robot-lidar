@@ -50,7 +50,7 @@ class Robot2D:
 
 
     def reset(self):
-        self.xr = np.random.uniform(low = self.env_min_size + self.rr , high = self.env_max_size - self.rr)
+        self.xr =  np.random.uniform(low = self.env_min_size + self.rr , high = self.env_max_size - self.rr)
         self.yr = np.random.uniform(low = self.env_min_size + self.rr , high = self.env_max_size - self.rr)
 
         if self.is_rotated:
@@ -78,12 +78,17 @@ class Robot2D:
 
         if self.is_goal:
             self.xg, self.yg = self.env._random_point_without_robot(self.xr, self.yr, self.rr, self.rg)
-            self.thg = np.random.uniform(low = 0 , high = 2*np.pi)
+            self.thg = np.random.uniform(low = -np.pi , high = np.pi)
 
         self.env.get_random_obstacles(self.xr, self.yr, self.rr, self.is_goal, self.xg, self.yg, self.rg)
         self.xls = []
         self.yls = []
             
+    def set_random_goal(self):
+        if self.is_goal:
+            self.xg, self.yg = self.env._random_point_without_obstacles_and_robot(self.xr, self.yr, self.rr, self.rg)
+            self.thg = np.random.uniform(low = -np.pi , high = np.pi)
+
 
     def step(self, vx, vy, w = 0):
         self.xr = self.xr + self.dT * (  np.cos(self.thr) * vx - np.sin(self.thr) * vy )
@@ -117,7 +122,8 @@ class Robot2D:
         self.xls = []
         self.yls = []
         touches = []
-        alphas = np.linspace(0,2*np.pi,90)
+        fov = np.deg2rad(180)
+        alphas = np.linspace(-fov/2,fov/2,90)
         for alpha in alphas:
             self.xls.append(self.xr + r * np.cos(alpha + self.thr))
             self.yls.append(self.yr + r * np.sin(alpha + self.thr))  
@@ -236,10 +242,32 @@ class Environment:
                 cond = True
         return px, py
 
+    def _random_point_without_obstacles_and_robot(self, pxr, pyr, rr, r):
+        if  self.xcs.size == 0:
+            print("No obstacles were found. Please load obstacles first.")
+            return -1
+
+        cond = False
+        while not cond:
+            cond = True
+            px = np.random.uniform(low = self.env_min_size + r, high = self.env_max_size - r) 
+            py = np.random.uniform(low = self.env_min_size + r, high = self.env_max_size - r) 
+
+            if (np.linalg.norm( [px - pxr, py - pyr])) < 4:
+                cond = False
+                continue
+
+            for xc, yc, rc in zip(self.xcs,self.ycs, self.rcs):
+                if (np.linalg.norm( [px - xc, py - yc])) < rc + r:
+                    cond = False
+                    break
+
+        return px, py
+
     
 
 
-    def get_random_obstacles(self, xr, yr, rr, is_goal = False, xg = 0, yg = 0, rg = 0, n = 25, r = 0.3):
+    def get_random_obstacles(self, xr, yr, rr, is_goal = False, xg = 0, yg = 0, rg = 0, n = 15, r = 0.3):
         xcs = []
         ycs = []
         rcs = n * [r]

@@ -4,7 +4,7 @@
 
 A simple 2D robot version with Lidar and deterministic sensor measurements for fast simulation. Environment simulation filled with circular obstacles. Made as a Python Package. Installation for easier usage stated below. 
 
-![image](./assets/simulation.png)
+![image](./assets/environment.png)
 
 ## Installation
 
